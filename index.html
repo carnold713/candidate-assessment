@@ -71,6 +71,7 @@
       fill1: "rgba(0,109,204,0.12)", stroke1: "rgba(0,109,204,0.85)",
       fill2: "rgba(0,82,153,0.10)", stroke2: "rgba(0,82,153,0.75)",
       dot: BRAND.white, dotStroke1: BRAND.blue, dotStroke2: BRAND.blueDark,
+      aiFill: "rgba(204,60,0,0.10)", aiStroke: "rgba(204,60,0,0.70)",
     };
 
     const FONT = "'Lutron Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif";
@@ -135,7 +136,7 @@
     }
 
     /* ─── Spider Chart ─── */
-    function SpiderChart({ attributes, scores, size = 400, accent, fill, stroke, dotStroke, onScore }) {
+    function SpiderChart({ attributes, scores, size = 400, accent, fill, stroke, dotStroke, onScore, showAI, aiScores }) {
       const n = attributes.length;
       const cx = size / 2, cy = size / 2, maxR = size * 0.35, levels = 5;
       const [hovered, setHovered] = useState(null);
@@ -146,6 +147,9 @@
       const levelPts = (lv) => attributes.map((_, i) => polar(cx, cy, (maxR * lv) / levels, i * step));
       const dataPts = scores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step));
       const dataPath = dataPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z";
+
+      const aiPts = showAI && aiScores ? aiScores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step)) : null;
+      const aiPath = aiPts ? aiPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z" : null;
 
       useEffect(() => {
         if (dragging === null) return;
@@ -190,6 +194,12 @@
           })}
           <path d={dataPath} fill={fill} stroke="none" />
           <path d={dataPath} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+          {aiPath && (
+            <>
+              <path d={aiPath} fill={C.aiFill} stroke="none" />
+              <path d={aiPath} fill="none" stroke={C.aiStroke} strokeWidth={1.5} strokeLinejoin="round" strokeDasharray="6,3" />
+            </>
+          )}
           {dataPts.map((p, i) => (
             <g key={i}>
               <circle cx={p.x} cy={p.y} r={hovered === i || dragging === i ? 7 : 5}
@@ -223,6 +233,14 @@
           <text x={cx} y={cy + 10} textAnchor="middle" fill={C.subtitleText} fontSize={8} fontFamily={FONT} fontWeight={400} letterSpacing="1.5px">
             AVERAGE
           </text>
+          {showAI && (
+            <g>
+              <line x1={12} y1={size - 20} x2={28} y2={size - 20} stroke={C.aiStroke} strokeWidth={1.5} strokeDasharray="6,3" />
+              <text x={32} y={size - 16} fill={C.aiStroke} fontSize={9} fontFamily={FONT} fontWeight={400}>AI Theoretical Coverage</text>
+              <line x1={12} y1={size - 36} x2={28} y2={size - 36} stroke={stroke} strokeWidth={1.5} />
+              <text x={32} y={size - 32} fill={accent} fontSize={9} fontFamily={FONT} fontWeight={400}>Candidate Score</text>
+            </g>
+          )}
         </svg>
       );
     }
@@ -241,7 +259,7 @@
     }
 
     /* ─── Assessment Card ─── */
-    function Card({ title, subtitle, attributes, scores, onScore, accent, fill, stroke, dotStroke }) {
+    function Card({ title, subtitle, attributes, scores, onScore, accent, fill, stroke, dotStroke, showAI, aiScores }) {
       return (
         <div style={{ flex: 1, minWidth: 340, background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 4, overflow: "hidden" }}>
           <div style={{ padding: "24px 28px 20px", borderBottom: `1px solid ${C.cardBorder}` }}>
@@ -250,7 +268,7 @@
             <p style={{ margin: "4px 0 0", fontSize: 12, fontFamily: FONT, fontWeight: 400, color: C.subtitleText }}>{subtitle}</p>
           </div>
           <div style={{ padding: "20px 16px 8px" }}>
-            <SpiderChart attributes={attributes} scores={scores} accent={accent} fill={fill} stroke={stroke} dotStroke={dotStroke} onScore={onScore} />
+            <SpiderChart attributes={attributes} scores={scores} accent={accent} fill={fill} stroke={stroke} dotStroke={dotStroke} onScore={onScore} showAI={showAI} aiScores={aiScores} />
           </div>
           <div style={{ padding: "8px 28px 24px" }}>
             <div style={{ fontSize: 9, fontFamily: FONT, fontWeight: 500, color: C.subtitleText, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Adjust Scores</div>
@@ -292,14 +310,22 @@
       "Coaching": "Capacity to develop others through feedback, mentorship, and active support.",
       "Critical Thinking": "Structured problem-solving, analytical reasoning, and sound judgment.",
       "T-Shape": "Breadth of cross-functional knowledge paired with deep domain specialization.",
-      "Adaptability": "Resilience and effectiveness when navigating change, ambiguity, or pressure.",
+      "Operational Proficiency": "Ability to effectively manage day-to-day operations, optimize processes, and ensure consistent delivery of results through disciplined execution and operational awareness.",
       "Cultural Fit": "Alignment with organizational values, working norms, and team dynamics.",
       "Execution": "Consistent delivery of high-quality results within timelines and constraints.",
       "Communication": "Clarity and effectiveness in conveying ideas across diverse audiences.",
     };
 
-    const A10 = ["Technical Mastery","Career Maturity","Leadership","Coaching","Critical Thinking","T-Shape","Adaptability","Cultural Fit","Execution","Communication"];
+    const A10 = ["Technical Mastery","Career Maturity","Leadership","Coaching","Critical Thinking","T-Shape","Operational Proficiency","Cultural Fit","Execution","Communication"];
     const A6 = ["Technical Mastery","Career Maturity","Coaching","Critical Thinking","T-Shape","Cultural Fit"];
+
+    /* ─── AI Theoretical Coverage (Anthropic Labor Market Research, March 2026) ─── */
+    const AI_COVERAGE = {
+      "Technical Mastery": 4.3, "Career Maturity": 0.8, "Leadership": 1.0,
+      "Coaching": 0.7, "Critical Thinking": 3.6, "T-Shape": 3.0,
+      "Operational Proficiency": 4.0, "Cultural Fit": 0.5,
+      "Execution": 3.3, "Communication": 3.8,
+    };
 
     /* ─── App ─── */
     function App() {
@@ -307,6 +333,7 @@
       const [s10, setS10] = useState(A10.map(() => 3));
       const [s6, setS6] = useState(A6.map(() => 3));
       const [exporting, setExporting] = useState(null);
+      const [showAI, setShowAI] = useState(false);
       const contentRef = useRef(null);
       const upd = (setter) => (i, v) => setter(prev => { const n = [...prev]; n[i] = v; return n; });
 
@@ -380,7 +407,21 @@
                 <div style={{ fontSize: 11, color: C.subtitleText, fontWeight: 400 }}>
                   {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
                 </div>
-                <div className="no-print" style={{ display: "flex", gap: 8 }}>
+                <div className="no-print" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button onClick={() => setShowAI(prev => !prev)}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      padding: "8px 20px", fontSize: 12, fontFamily: FONT, fontWeight: 500,
+                      color: showAI ? BRAND.white : "#CC3C00",
+                      background: showAI ? "#CC3C00" : BRAND.white,
+                      border: "1px solid #CC3C00", borderRadius: 100,
+                      cursor: "pointer", transition: "background 0.2s, color 0.2s",
+                    }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    {showAI ? "Hide AI Coverage" : "Show AI Coverage"}
+                  </button>
                   <ExportButton label="Export JPG" loading={exporting === 'jpg'} onClick={exportJPG}
                     icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>} />
                   <ExportButton label="Export PDF" loading={exporting === 'pdf'} onClick={exportPDF}
@@ -395,10 +436,12 @@
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <Card title="Comprehensive Assessment" subtitle="10 competency dimensions"
                 attributes={A10} scores={s10} onScore={upd(setS10)}
-                accent={BRAND.blue} fill={C.fill1} stroke={C.stroke1} dotStroke={C.dotStroke1} />
+                accent={BRAND.blue} fill={C.fill1} stroke={C.stroke1} dotStroke={C.dotStroke1}
+                showAI={showAI} aiScores={A10.map(a => AI_COVERAGE[a])} />
               <Card title="Core Assessment" subtitle="6 key competencies"
                 attributes={A6} scores={s6} onScore={upd(setS6)}
-                accent={BRAND.blueDark} fill={C.fill2} stroke={C.stroke2} dotStroke={C.dotStroke2} />
+                accent={BRAND.blueDark} fill={C.fill2} stroke={C.stroke2} dotStroke={C.dotStroke2}
+                showAI={showAI} aiScores={A6.map(a => AI_COVERAGE[a])} />
             </div>
 
             {/* Attribute Reference */}
