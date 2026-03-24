@@ -142,8 +142,12 @@
       const cx = size / 2, cy = size / 2, maxR = size * 0.35, levels = 5;
       const [hovered, setHovered] = useState(null);
       const [dragging, setDragging] = useState(null);
+      const [legendHover, setLegendHover] = useState(null);
       const svgRef = useRef(null);
       const step = 360 / n;
+      const opC = legendHover && legendHover !== "candidate" ? 0.3 : 1;
+      const opT = legendHover && legendHover !== "theoretical" ? 0.3 : 1;
+      const opO = legendHover && legendHover !== "observed" ? 0.3 : 1;
 
       const levelPts = (lv) => attributes.map((_, i) => polar(cx, cy, (maxR * lv) / levels, i * step));
       const dataPts = scores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step));
@@ -202,41 +206,43 @@
               const o = polar(cx, cy, maxR, i * step);
               return <line key={i} x1={cx} y1={cy} x2={o.x} y2={o.y} stroke={C.gridFaint} strokeWidth={0.5} />;
             })}
-            <path d={dataPath} fill={fill} stroke="none" />
-            <path d={dataPath} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+            <g opacity={opC} style={{ transition: "opacity 0.2s" }}>
+              <path d={dataPath} fill={fill} stroke="none" />
+              <path d={dataPath} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+              {dataPts.map((p, i) => (
+                <g key={i}>
+                  <circle cx={p.x} cy={p.y} r={hovered === i || dragging === i ? 7 : 5}
+                    fill={C.dot} stroke={dotStroke} strokeWidth={2}
+                    style={{ cursor: "grab", transition: "r 0.15s ease" }}
+                    onMouseDown={(e) => { e.preventDefault(); setDragging(i); }}
+                    onMouseEnter={() => setHovered(i)}
+                    onMouseLeave={() => { if (dragging !== i) setHovered(null); }} />
+                  {(hovered === i || dragging === i) && !showAI && (
+                    <text x={p.x} y={p.y - 14} textAnchor="middle" fill={accent} fontSize={11} fontFamily={FONT} fontWeight={500}>
+                      {scores[i].toFixed(1)}
+                    </text>
+                  )}
+                </g>
+              ))}
+            </g>
             {theoPath && (
-              <>
+              <g opacity={opT} style={{ transition: "opacity 0.2s" }}>
                 <path d={theoPath} fill={C.aiFill} stroke="none" />
-                <path d={theoPath} fill="none" stroke={C.aiStroke} strokeWidth={1.5} strokeLinejoin="round" strokeDasharray="6,3" />
-              </>
+                <path d={theoPath} fill="none" stroke={C.aiStroke} strokeWidth={1.5} strokeLinejoin="round" />
+                {theoPts.map((p, i) => (
+                  <circle key={"t"+i} cx={p.x} cy={p.y} r={3} fill={C.aiStroke} stroke="none" opacity={0.7} />
+                ))}
+              </g>
             )}
             {obsPath && (
-              <>
+              <g opacity={opO} style={{ transition: "opacity 0.2s" }}>
                 <path d={obsPath} fill={C.aiObsFill} stroke="none" />
                 <path d={obsPath} fill="none" stroke={C.aiObsStroke} strokeWidth={1.5} strokeLinejoin="round" strokeDasharray="3,4" />
-              </>
-            )}
-            {dataPts.map((p, i) => (
-              <g key={i}>
-                <circle cx={p.x} cy={p.y} r={hovered === i || dragging === i ? 7 : 5}
-                  fill={C.dot} stroke={dotStroke} strokeWidth={2}
-                  style={{ cursor: "grab", transition: "r 0.15s ease" }}
-                  onMouseDown={(e) => { e.preventDefault(); setDragging(i); }}
-                  onMouseEnter={() => setHovered(i)}
-                  onMouseLeave={() => { if (dragging !== i) setHovered(null); }} />
-                {(hovered === i || dragging === i) && !showAI && (
-                  <text x={p.x} y={p.y - 14} textAnchor="middle" fill={accent} fontSize={11} fontFamily={FONT} fontWeight={500}>
-                    {scores[i].toFixed(1)}
-                  </text>
-                )}
+                {obsPts.map((p, i) => (
+                  <circle key={"o"+i} cx={p.x} cy={p.y} r={3} fill={C.aiObsStroke} stroke="none" opacity={0.7} />
+                ))}
               </g>
-            ))}
-            {showAI && theoPts && theoPts.map((p, i) => (
-              <circle key={"t"+i} cx={p.x} cy={p.y} r={3} fill={C.aiStroke} stroke="none" opacity={0.7} />
-            ))}
-            {showAI && obsPts && obsPts.map((p, i) => (
-              <circle key={"o"+i} cx={p.x} cy={p.y} r={3} fill={C.aiObsStroke} stroke="none" opacity={0.7} />
-            ))}
+            )}
             {attributes.map((attr, i) => {
               const p = polar(cx, cy, maxR + 28, i * step);
               const ang = i * step;
@@ -257,12 +263,21 @@
             </text>
             {showAI && (
               <g>
-                <line x1={12} y1={size - 36} x2={28} y2={size - 36} stroke={stroke} strokeWidth={1.5} />
-                <text x={32} y={size - 32} fill={accent} fontSize={9} fontFamily={FONT} fontWeight={400}>Candidate Score</text>
-                <line x1={12} y1={size - 22} x2={28} y2={size - 22} stroke={C.aiStroke} strokeWidth={1.5} strokeDasharray="6,3" />
-                <text x={32} y={size - 18} fill={C.aiStroke} fontSize={9} fontFamily={FONT} fontWeight={400}>Theoretical AI</text>
-                <line x1={12} y1={size - 8} x2={28} y2={size - 8} stroke={C.aiObsStroke} strokeWidth={1.5} strokeDasharray="3,4" />
-                <text x={32} y={size - 4} fill={C.aiObsStroke} fontSize={9} fontFamily={FONT} fontWeight={400}>Observed AI</text>
+                <g onMouseEnter={() => setLegendHover("candidate")} onMouseLeave={() => setLegendHover(null)} style={{ cursor: "pointer" }}>
+                  <rect x={8} y={size - 44} width={140} height={14} fill="transparent" />
+                  <line x1={12} y1={size - 36} x2={28} y2={size - 36} stroke={stroke} strokeWidth={1.5} />
+                  <text x={32} y={size - 32} fill={accent} fontSize={9} fontFamily={FONT} fontWeight={legendHover === "candidate" ? 600 : 400}>Candidate Score</text>
+                </g>
+                <g onMouseEnter={() => setLegendHover("theoretical")} onMouseLeave={() => setLegendHover(null)} style={{ cursor: "pointer" }}>
+                  <rect x={8} y={size - 30} width={140} height={14} fill="transparent" />
+                  <line x1={12} y1={size - 22} x2={28} y2={size - 22} stroke={C.aiStroke} strokeWidth={1.5} />
+                  <text x={32} y={size - 18} fill={C.aiStroke} fontSize={9} fontFamily={FONT} fontWeight={legendHover === "theoretical" ? 600 : 400}>Theoretical AI</text>
+                </g>
+                <g onMouseEnter={() => setLegendHover("observed")} onMouseLeave={() => setLegendHover(null)} style={{ cursor: "pointer" }}>
+                  <rect x={8} y={size - 16} width={140} height={14} fill="transparent" />
+                  <line x1={12} y1={size - 8} x2={28} y2={size - 8} stroke={C.aiObsStroke} strokeWidth={1.5} strokeDasharray="3,4" />
+                  <text x={32} y={size - 4} fill={C.aiObsStroke} fontSize={9} fontFamily={FONT} fontWeight={legendHover === "observed" ? 600 : 400}>Observed AI</text>
+                </g>
               </g>
             )}
           </svg>
