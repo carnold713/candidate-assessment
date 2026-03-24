@@ -72,6 +72,7 @@
       fill2: "rgba(0,82,153,0.10)", stroke2: "rgba(0,82,153,0.75)",
       dot: BRAND.white, dotStroke1: BRAND.blue, dotStroke2: BRAND.blueDark,
       aiFill: "rgba(204,60,0,0.10)", aiStroke: "rgba(204,60,0,0.70)",
+      aiObsFill: "rgba(180,30,0,0.08)", aiObsStroke: "rgba(180,30,0,0.60)",
     };
 
     const FONT = "'Lutron Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif";
@@ -136,7 +137,7 @@
     }
 
     /* ─── Spider Chart ─── */
-    function SpiderChart({ attributes, scores, size = 400, accent, fill, stroke, dotStroke, onScore, showAI, aiScores }) {
+    function SpiderChart({ attributes, scores, size = 400, accent, fill, stroke, dotStroke, onScore, showAI, aiData }) {
       const n = attributes.length;
       const cx = size / 2, cy = size / 2, maxR = size * 0.35, levels = 5;
       const [hovered, setHovered] = useState(null);
@@ -148,8 +149,12 @@
       const dataPts = scores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step));
       const dataPath = dataPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z";
 
-      const aiPts = showAI && aiScores ? aiScores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step)) : null;
-      const aiPath = aiPts ? aiPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z" : null;
+      const theoScores = showAI && aiData ? aiData.map(d => (d.theoretical / 100) * 5) : null;
+      const obsScores = showAI && aiData ? aiData.map(d => (d.observed / 100) * 5) : null;
+      const theoPts = theoScores ? theoScores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step)) : null;
+      const theoPath = theoPts ? theoPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z" : null;
+      const obsPts = obsScores ? obsScores.map((s, i) => polar(cx, cy, (maxR * s) / 5, i * step)) : null;
+      const obsPath = obsPts ? obsPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z" : null;
 
       useEffect(() => {
         if (dragging === null) return;
@@ -180,86 +185,159 @@
         return lines.map((l, li) => <tspan key={li} x={x} dy={li === 0 ? 0 : 12}>{l}</tspan>);
       };
 
+      const tipIdx = showAI && aiData && hovered !== null ? hovered : null;
+      const tipData = tipIdx !== null ? aiData[tipIdx] : null;
+      const tipPt = tipIdx !== null ? dataPts[tipIdx] : null;
+
       return (
-        <svg ref={svgRef} width="100%" viewBox={`0 0 ${size} ${size}`}
-          style={{ display: "block", maxWidth: size, margin: "0 auto", cursor: dragging !== null ? "grabbing" : "default" }}>
-          {Array.from({ length: levels }, (_, l) => {
-            const pts = levelPts(l + 1);
-            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z";
-            return <path key={l} d={d} fill="none" stroke={l === levels - 1 ? C.gridLine : C.gridFaint} strokeWidth={l === levels - 1 ? 1 : 0.5} />;
-          })}
-          {attributes.map((_, i) => {
-            const o = polar(cx, cy, maxR, i * step);
-            return <line key={i} x1={cx} y1={cy} x2={o.x} y2={o.y} stroke={C.gridFaint} strokeWidth={0.5} />;
-          })}
-          <path d={dataPath} fill={fill} stroke="none" />
-          <path d={dataPath} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
-          {aiPath && (
-            <>
-              <path d={aiPath} fill={C.aiFill} stroke="none" />
-              <path d={aiPath} fill="none" stroke={C.aiStroke} strokeWidth={1.5} strokeLinejoin="round" strokeDasharray="6,3" />
-            </>
-          )}
-          {dataPts.map((p, i) => (
-            <g key={i}>
-              <circle cx={p.x} cy={p.y} r={hovered === i || dragging === i ? 7 : 5}
-                fill={C.dot} stroke={dotStroke} strokeWidth={2}
-                style={{ cursor: "grab", transition: "r 0.15s ease" }}
-                onMouseDown={(e) => { e.preventDefault(); setDragging(i); }}
-                onMouseEnter={() => setHovered(i)}
-                onMouseLeave={() => { if (dragging !== i) setHovered(null); }} />
-              {(hovered === i || dragging === i) && (
-                <text x={p.x} y={p.y - 14} textAnchor="middle" fill={accent} fontSize={11} fontFamily={FONT} fontWeight={500}>
-                  {scores[i].toFixed(1)}
+        <div style={{ position: "relative" }}>
+          <svg ref={svgRef} width="100%" viewBox={`0 0 ${size} ${size}`}
+            style={{ display: "block", maxWidth: size, margin: "0 auto", cursor: dragging !== null ? "grabbing" : "default" }}>
+            {Array.from({ length: levels }, (_, l) => {
+              const pts = levelPts(l + 1);
+              const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + "Z";
+              return <path key={l} d={d} fill="none" stroke={l === levels - 1 ? C.gridLine : C.gridFaint} strokeWidth={l === levels - 1 ? 1 : 0.5} />;
+            })}
+            {attributes.map((_, i) => {
+              const o = polar(cx, cy, maxR, i * step);
+              return <line key={i} x1={cx} y1={cy} x2={o.x} y2={o.y} stroke={C.gridFaint} strokeWidth={0.5} />;
+            })}
+            <path d={dataPath} fill={fill} stroke="none" />
+            <path d={dataPath} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />
+            {theoPath && (
+              <>
+                <path d={theoPath} fill={C.aiFill} stroke="none" />
+                <path d={theoPath} fill="none" stroke={C.aiStroke} strokeWidth={1.5} strokeLinejoin="round" strokeDasharray="6,3" />
+              </>
+            )}
+            {obsPath && (
+              <>
+                <path d={obsPath} fill={C.aiObsFill} stroke="none" />
+                <path d={obsPath} fill="none" stroke={C.aiObsStroke} strokeWidth={1.5} strokeLinejoin="round" strokeDasharray="3,4" />
+              </>
+            )}
+            {dataPts.map((p, i) => (
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r={hovered === i || dragging === i ? 7 : 5}
+                  fill={C.dot} stroke={dotStroke} strokeWidth={2}
+                  style={{ cursor: "grab", transition: "r 0.15s ease" }}
+                  onMouseDown={(e) => { e.preventDefault(); setDragging(i); }}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => { if (dragging !== i) setHovered(null); }} />
+                {(hovered === i || dragging === i) && !showAI && (
+                  <text x={p.x} y={p.y - 14} textAnchor="middle" fill={accent} fontSize={11} fontFamily={FONT} fontWeight={500}>
+                    {scores[i].toFixed(1)}
+                  </text>
+                )}
+              </g>
+            ))}
+            {showAI && theoPts && theoPts.map((p, i) => (
+              <circle key={"t"+i} cx={p.x} cy={p.y} r={3} fill={C.aiStroke} stroke="none" opacity={0.7} />
+            ))}
+            {showAI && obsPts && obsPts.map((p, i) => (
+              <circle key={"o"+i} cx={p.x} cy={p.y} r={3} fill={C.aiObsStroke} stroke="none" opacity={0.7} />
+            ))}
+            {attributes.map((attr, i) => {
+              const p = polar(cx, cy, maxR + 28, i * step);
+              const ang = i * step;
+              return (
+                <text key={i} x={p.x} y={p.y + (ang < 45 || ang > 315 ? -2 : ang > 135 && ang < 225 ? 6 : 2)}
+                  textAnchor="middle" fill={hovered === i ? C.axisHover : C.axisLabel}
+                  fontSize={10} fontFamily={FONT} fontWeight={hovered === i ? 500 : 400}
+                  style={{ transition: "fill 0.2s", userSelect: "none" }}>
+                  {wrapLabel(attr, p.x)}
                 </text>
-              )}
-            </g>
-          ))}
-          {attributes.map((attr, i) => {
-            const p = polar(cx, cy, maxR + 28, i * step);
-            const ang = i * step;
+              );
+            })}
+            <text x={cx} y={cy - 6} textAnchor="middle" fill={accent} fontSize={22} fontFamily={FONT} fontWeight={300}>
+              {(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}
+            </text>
+            <text x={cx} y={cy + 10} textAnchor="middle" fill={C.subtitleText} fontSize={8} fontFamily={FONT} fontWeight={400} letterSpacing="1.5px">
+              AVERAGE
+            </text>
+            {showAI && (
+              <g>
+                <line x1={12} y1={size - 36} x2={28} y2={size - 36} stroke={stroke} strokeWidth={1.5} />
+                <text x={32} y={size - 32} fill={accent} fontSize={9} fontFamily={FONT} fontWeight={400}>Candidate Score</text>
+                <line x1={12} y1={size - 22} x2={28} y2={size - 22} stroke={C.aiStroke} strokeWidth={1.5} strokeDasharray="6,3" />
+                <text x={32} y={size - 18} fill={C.aiStroke} fontSize={9} fontFamily={FONT} fontWeight={400}>Theoretical AI</text>
+                <line x1={12} y1={size - 8} x2={28} y2={size - 8} stroke={C.aiObsStroke} strokeWidth={1.5} strokeDasharray="3,4" />
+                <text x={32} y={size - 4} fill={C.aiObsStroke} fontSize={9} fontFamily={FONT} fontWeight={400}>Observed AI</text>
+              </g>
+            )}
+          </svg>
+          {tipData && tipPt && (() => {
+            const svgEl = svgRef.current;
+            if (!svgEl) return null;
+            const pctX = (tipPt.x / size) * 100;
+            const pctY = (tipPt.y / size) * 100;
+            const tipLeft = pctX > 50;
             return (
-              <text key={i} x={p.x} y={p.y + (ang < 45 || ang > 315 ? -2 : ang > 135 && ang < 225 ? 6 : 2)}
-                textAnchor="middle" fill={hovered === i ? C.axisHover : C.axisLabel}
-                fontSize={10} fontFamily={FONT} fontWeight={hovered === i ? 500 : 400}
-                style={{ transition: "fill 0.2s", userSelect: "none" }}>
-                {wrapLabel(attr, p.x)}
-              </text>
+              <div style={{
+                position: "absolute", top: `${pctY}%`, left: tipLeft ? "auto" : `${pctX}%`,
+                right: tipLeft ? `${100 - pctX}%` : "auto",
+                transform: `translate(${tipLeft ? "8px" : "-8px"}, -50%)`,
+                background: BRAND.white, border: `1px solid ${C.cardBorder}`,
+                borderRadius: 8, padding: "14px 16px", maxWidth: 220, minWidth: 180,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.10)", pointerEvents: "none", zIndex: 10,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.titleText, marginBottom: 8, lineHeight: 1.3 }}>
+                  {tipData.extName}
+                </div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: C.aiStroke }}>Theoretical:</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.aiStroke }}>{tipData.theoretical}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: C.aiObsStroke }}>Observed:</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.aiObsStroke }}>{tipData.observed}%</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: BRAND.gray70, lineHeight: 1.5 }}>
+                  {tipData.insight}
+                </div>
+              </div>
             );
-          })}
-          <text x={cx} y={cy - 6} textAnchor="middle" fill={accent} fontSize={22} fontFamily={FONT} fontWeight={300}>
-            {(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}
-          </text>
-          <text x={cx} y={cy + 10} textAnchor="middle" fill={C.subtitleText} fontSize={8} fontFamily={FONT} fontWeight={400} letterSpacing="1.5px">
-            AVERAGE
-          </text>
-          {showAI && (
-            <g>
-              <line x1={12} y1={size - 20} x2={28} y2={size - 20} stroke={C.aiStroke} strokeWidth={1.5} strokeDasharray="6,3" />
-              <text x={32} y={size - 16} fill={C.aiStroke} fontSize={9} fontFamily={FONT} fontWeight={400}>AI Theoretical Coverage</text>
-              <line x1={12} y1={size - 36} x2={28} y2={size - 36} stroke={stroke} strokeWidth={1.5} />
-              <text x={32} y={size - 32} fill={accent} fontSize={9} fontFamily={FONT} fontWeight={400}>Candidate Score</text>
-            </g>
-          )}
-        </svg>
+          })()}
+        </div>
       );
     }
 
     /* ─── Slider Row ─── */
-    function SliderRow({ label, value, onChange, accent }) {
+    function SliderRow({ label, value, onChange, accent, index, showAI, theoretical, observed }) {
       return (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <span style={{
+            flex: "0 0 22px", width: 22, height: 22, borderRadius: "50%",
+            background: accent, color: BRAND.white, fontSize: 10, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT,
+          }}>{index + 1}</span>
           <span style={{ flex: "0 0 120px", fontSize: 12, fontFamily: FONT, fontWeight: 400, color: C.scoreText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
           <input type="range" min={0.5} max={5} step={0.5} value={value}
             onChange={(e) => onChange(parseFloat(e.target.value))}
             style={{ flex: 1, background: `linear-gradient(to right, ${accent} 0%, ${accent} ${((value - 0.5) / 4.5) * 100}%, ${C.sliderTrack} ${((value - 0.5) / 4.5) * 100}%, ${C.sliderTrack} 100%)` }} />
           <span style={{ flex: "0 0 28px", fontSize: 12, fontFamily: FONT, fontWeight: 500, color: accent, textAlign: "right" }}>{value.toFixed(1)}</span>
+          {showAI && (
+            <>
+              <span style={{
+                flex: "0 0 40px", fontSize: 10, fontWeight: 600, fontFamily: FONT,
+                color: C.aiStroke, background: "rgba(204,60,0,0.10)", borderRadius: 4,
+                padding: "2px 6px", textAlign: "center",
+              }}>{theoretical}%</span>
+              <span style={{
+                flex: "0 0 40px", fontSize: 10, fontWeight: 600, fontFamily: FONT,
+                color: C.aiObsStroke, background: "rgba(180,30,0,0.08)", borderRadius: 4,
+                padding: "2px 6px", textAlign: "center",
+              }}>{observed}%</span>
+            </>
+          )}
         </div>
       );
     }
 
     /* ─── Assessment Card ─── */
-    function Card({ title, subtitle, attributes, scores, onScore, accent, fill, stroke, dotStroke, showAI, aiScores }) {
+    function Card({ title, subtitle, attributes, scores, onScore, accent, fill, stroke, dotStroke, showAI, aiData }) {
       return (
         <div style={{ flex: 1, minWidth: 340, background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 4, overflow: "hidden" }}>
           <div style={{ padding: "24px 28px 20px", borderBottom: `1px solid ${C.cardBorder}` }}>
@@ -268,12 +346,26 @@
             <p style={{ margin: "4px 0 0", fontSize: 12, fontFamily: FONT, fontWeight: 400, color: C.subtitleText }}>{subtitle}</p>
           </div>
           <div style={{ padding: "20px 16px 8px" }}>
-            <SpiderChart attributes={attributes} scores={scores} accent={accent} fill={fill} stroke={stroke} dotStroke={dotStroke} onScore={onScore} showAI={showAI} aiScores={aiScores} />
+            <SpiderChart attributes={attributes} scores={scores} accent={accent} fill={fill} stroke={stroke} dotStroke={dotStroke} onScore={onScore} showAI={showAI} aiData={aiData} />
           </div>
           <div style={{ padding: "8px 28px 24px" }}>
-            <div style={{ fontSize: 9, fontFamily: FONT, fontWeight: 500, color: C.subtitleText, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>Adjust Scores</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span style={{ flex: "0 0 22px" }} />
+              <span style={{ flex: "0 0 120px", fontSize: 9, fontFamily: FONT, fontWeight: 500, color: C.subtitleText, letterSpacing: "1.5px", textTransform: "uppercase" }}>Adjust Scores</span>
+              <span style={{ flex: 1 }} />
+              <span style={{ flex: "0 0 28px" }} />
+              {showAI && (
+                <>
+                  <span style={{ flex: "0 0 40px", fontSize: 9, fontWeight: 600, fontFamily: FONT, color: C.aiStroke, textAlign: "center", letterSpacing: "0.5px" }}>β</span>
+                  <span style={{ flex: "0 0 40px", fontSize: 9, fontWeight: 600, fontFamily: FONT, color: C.aiObsStroke, textAlign: "center", letterSpacing: "0.5px" }}>Obs</span>
+                </>
+              )}
+            </div>
             {attributes.map((attr, i) => (
-              <SliderRow key={attr} label={attr} value={scores[i]} onChange={(v) => onScore(i, v)} accent={accent} />
+              <SliderRow key={attr} label={attr} value={scores[i]} onChange={(v) => onScore(i, v)} accent={accent}
+                index={i} showAI={showAI}
+                theoretical={aiData ? aiData[i].theoretical : 0}
+                observed={aiData ? aiData[i].observed : 0} />
             ))}
           </div>
         </div>
@@ -302,30 +394,72 @@
       );
     }
 
-    /* ─── Definitions ─── */
-    const DEFS = {
-      "Technical Mastery": "Depth of expertise in relevant technologies, tools, and engineering practices.",
-      "Career Maturity": "Professional growth trajectory, decision-making quality, and long-term alignment.",
-      "Leadership": "Ability to guide, influence, and drive outcomes across teams and stakeholders.",
-      "Coaching": "Capacity to develop others through feedback, mentorship, and active support.",
-      "Critical Thinking": "Structured problem-solving, analytical reasoning, and sound judgment.",
-      "T-Shape": "Breadth of cross-functional knowledge paired with deep domain specialization.",
-      "Operational Proficiency": "Ability to effectively manage day-to-day operations, optimize processes, and ensure consistent delivery of results through disciplined execution and operational awareness.",
-      "Cultural Fit": "Alignment with organizational values, working norms, and team dynamics.",
-      "Execution": "Consistent delivery of high-quality results within timelines and constraints.",
-      "Communication": "Clarity and effectiveness in conveying ideas across diverse audiences.",
+    /* ─── Definitions & AI Data (Anthropic Labor Market Research, March 2026) ─── */
+    const AI_DATA = {
+      "Technical Mastery": {
+        extName: "Technical Mastery & Domain Expertise",
+        extDef: "Ability to demonstrate deep, relevant knowledge of their craft, apply it in real-world scenarios, and keep pace with evolving tools, methods, and standards.",
+        theoretical: 85, observed: 33,
+        insight: "High theoretical LLM capability for technical tasks (94% in Computer & Math). Observed coverage ~33% — AI augments but doesn't replace deep domain mastery."
+      },
+      "Career Maturity": {
+        extName: "Career Maturity & Trajectory Discipline",
+        extDef: "Evidence of thoughtful career progression—making deliberate moves rather than opportunistic jumps—and showing commitment to learning, growth, and delivering impact over time.",
+        theoretical: 10, observed: 2,
+        insight: "Minimal AI exposure. Career judgment, trajectory planning, and professional maturity remain deeply human competencies with negligible automation risk."
+      },
+      "Leadership": {
+        extName: "Leadership & Influence Capability",
+        extDef: "Capacity to guide, motivate, and align teams—even without formal authority. Demonstrates judgement, accountability, resilience, and an ability to elevate others.",
+        theoretical: 15, observed: 5,
+        insight: "Very low AI coverage. Leadership, influence, and team alignment involve social dynamics and emotional intelligence beyond current LLM capabilities."
+      },
+      "Coaching": {
+        extName: "Coaching & Knowledge-Sharing Mindset",
+        extDef: "Willingness and ability to teach, mentor, and transfer knowledge. Looks for ways to grow colleagues and build organizational capability, not just personal success.",
+        theoretical: 30, observed: 10,
+        insight: "Moderate theoretical potential for knowledge transfer tasks. AI can assist with training materials, but mentorship and culture-building remain human."
+      },
+      "Critical Thinking": {
+        extName: "Critical Thinking & Creative Problem Solving",
+        extDef: "Skilled at diagnosing problems, thinking beyond obvious solutions, and challenging assumptions. Shows curiosity, structured reasoning, and creative capabilities.",
+        theoretical: 70, observed: 25,
+        insight: "High theoretical capability — LLMs excel at structured reasoning. Observed coverage lower due to the contextual, intuitive nature of creative problem solving."
+      },
+      "T-Shape": {
+        extName: "Depth vs. Breadth of Expertise (T-Shape)",
+        extDef: "Understanding whether the role requires deep specialization, broad cross-functional fluency, or a hybrid T-shaped profile—and assessing the candidate accordingly.",
+        theoretical: 45, observed: 15,
+        insight: "Moderate theoretical exposure. AI narrows specialist advantages in some domains, but cross-functional fluency and judgment on role design remain human tasks."
+      },
+      "Operational Proficiency": {
+        extName: "Operational Proficiency",
+        extDef: "Ability to effectively manage day-to-day operations, optimize processes, and ensure consistent delivery of results through disciplined execution and operational awareness.",
+        theoretical: 80, observed: 40,
+        insight: "High coverage for process-oriented tasks. Office & Admin tasks show 90% theoretical feasibility. Routine operations are a primary area of observed AI automation."
+      },
+      "Cultural Fit": {
+        extName: "Cultural Alignment & Values Fit",
+        extDef: "Fit with the organization's mindset, behaviors, and purpose—not just personality. Ensures the candidate will thrive, contribute, and reinforce the culture you want to build.",
+        theoretical: 5, observed: 1,
+        insight: "Near-zero AI exposure. Cultural assessment requires nuanced human judgment about values, interpersonal dynamics, and organizational context."
+      },
+      "Execution": {
+        extName: "Execution & Delivery Excellence",
+        extDef: "Consistent ability to deliver high-quality outcomes on time and within constraints. Balances speed with thoroughness and manages competing priorities effectively.",
+        theoretical: 55, observed: 20,
+        insight: "Moderate theoretical coverage for structured delivery tasks. AI assists with planning and tracking, but accountability and prioritization under pressure remain human-driven."
+      },
+      "Communication": {
+        extName: "Communication & Stakeholder Clarity",
+        extDef: "Clarity and effectiveness in conveying complex ideas across diverse audiences. Adapts tone, format, and depth to the context—written, verbal, and visual.",
+        theoretical: 75, observed: 30,
+        insight: "High theoretical capability — LLMs excel at writing, editing, and content generation (83.7% in Arts & Media). Observed ~30% as nuanced, context-sensitive communication still requires human judgment."
+      },
     };
 
     const A10 = ["Technical Mastery","Career Maturity","Leadership","Coaching","Critical Thinking","T-Shape","Operational Proficiency","Cultural Fit","Execution","Communication"];
     const A6 = ["Technical Mastery","Career Maturity","Coaching","Critical Thinking","T-Shape","Cultural Fit"];
-
-    /* ─── AI Theoretical Coverage (Anthropic Labor Market Research, March 2026) ─── */
-    const AI_COVERAGE = {
-      "Technical Mastery": 4.3, "Career Maturity": 0.8, "Leadership": 1.0,
-      "Coaching": 0.7, "Critical Thinking": 3.6, "T-Shape": 3.0,
-      "Operational Proficiency": 4.0, "Cultural Fit": 0.5,
-      "Execution": 3.3, "Communication": 3.8,
-    };
 
     /* ─── App ─── */
     function App() {
@@ -437,22 +571,44 @@
               <Card title="Comprehensive Assessment" subtitle="10 competency dimensions"
                 attributes={A10} scores={s10} onScore={upd(setS10)}
                 accent={BRAND.blue} fill={C.fill1} stroke={C.stroke1} dotStroke={C.dotStroke1}
-                showAI={showAI} aiScores={A10.map(a => AI_COVERAGE[a])} />
+                showAI={showAI} aiData={A10.map(a => AI_DATA[a])} />
               <Card title="Core Assessment" subtitle="6 key competencies"
                 attributes={A6} scores={s6} onScore={upd(setS6)}
                 accent={BRAND.blueDark} fill={C.fill2} stroke={C.stroke2} dotStroke={C.dotStroke2}
-                showAI={showAI} aiScores={A6.map(a => AI_COVERAGE[a])} />
+                showAI={showAI} aiData={A6.map(a => AI_DATA[a])} />
             </div>
 
-            {/* Attribute Reference */}
+            {/* Attribute Reference — Two Columns */}
             <div style={{ marginTop: 40, background: C.sectionBg, borderRadius: 4, padding: "28px 32px", border: `1px solid ${C.cardBorder}` }}>
               <div style={{ width: 32, height: 2, background: BRAND.blue, marginBottom: 16 }} />
-              <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 300, color: C.titleText, letterSpacing: "-0.2px" }}>Attribute Reference</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px 32px" }}>
-                {Object.entries(DEFS).map(([k, d]) => (
-                  <div key={k} style={{ borderTop: `1px solid ${C.cardBorder}`, paddingTop: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: C.titleText, marginBottom: 4 }}>{k}</div>
-                    <div style={{ fontSize: 11, fontWeight: 400, color: C.subtitleText, lineHeight: 1.5 }}>{d}</div>
+              <h3 style={{ margin: "0 0 24px", fontSize: 16, fontWeight: 300, color: C.titleText, letterSpacing: "-0.2px" }}>Attribute Reference</h3>
+              <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+                {[{ label: "Comprehensive (10)", attrs: A10, color: BRAND.blue }, { label: "Core (6)", attrs: A6, color: BRAND.blueDark }].map(({ label, attrs, color }) => (
+                  <div key={label} style={{ flex: 1, minWidth: 320 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color, marginBottom: 16, letterSpacing: "-0.2px" }}>{label}</div>
+                    {attrs.map((attr, i) => {
+                      const d = AI_DATA[attr];
+                      const gap = d.theoretical - d.observed;
+                      return (
+                        <div key={attr} style={{ borderTop: `1px solid ${C.cardBorder}`, padding: "14px 0" }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+                            <span style={{
+                              flex: "0 0 22px", width: 22, height: 22, borderRadius: "50%",
+                              background: color, color: BRAND.white, fontSize: 10, fontWeight: 600,
+                              display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: FONT,
+                            }}>{i + 1}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: C.titleText }}>{d.extName}</span>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 400, color: C.subtitleText, lineHeight: 1.6, marginBottom: 10, paddingLeft: 32 }}>{d.extDef}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, paddingLeft: 32 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.aiStroke, background: "rgba(204,60,0,0.10)", borderRadius: 4, padding: "2px 8px" }}>Theoretical: {d.theoretical}%</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.aiObsStroke, background: "rgba(180,30,0,0.08)", borderRadius: 4, padding: "2px 8px" }}>Observed: {d.observed}%</span>
+                            <span style={{ fontSize: 10, fontWeight: 500, color: BRAND.gray70 }}>Gap: {gap}%</span>
+                          </div>
+                          <div style={{ fontSize: 10, fontWeight: 400, color: BRAND.gray70, lineHeight: 1.6, paddingLeft: 32, fontStyle: "normal" }}>{d.insight}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
