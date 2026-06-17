@@ -476,6 +476,77 @@
     const A10 = ["Technical Mastery","Career Maturity","Leadership","Coaching","Critical Thinking","T-Shape","Operational Proficiency","Cultural Fit","Execution","Communication"];
     const A6 = ["Technical Mastery","Career Maturity","Coaching","Critical Thinking","T-Shape","Cultural Fit"];
 
+    /* ─── Password Gate ─── */
+    const APP_PASSWORD = "Lutron2026!";
+
+    function PasswordGate({ onUnlock }) {
+      const [value, setValue] = useState("");
+      const [error, setError] = useState(false);
+      const inputRef = useRef(null);
+
+      useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
+
+      const submit = (e) => {
+        e.preventDefault();
+        if (value === APP_PASSWORD) {
+          onUnlock();
+        } else {
+          setError(true);
+        }
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: FONT, padding: 24 }}>
+          <form onSubmit={submit} style={{
+            width: "100%", maxWidth: 380, background: C.cardBg, border: `1px solid ${C.cardBorder}`,
+            borderRadius: 6, padding: "44px 36px", display: "flex", flexDirection: "column",
+            alignItems: "center", gap: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+          }}>
+            <LutronLogo height={20} color={BRAND.offBlack} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: "2px", color: C.subtitleText, textTransform: "uppercase", marginBottom: 8 }}>
+                Candidate Assessment
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 300, color: C.titleText, letterSpacing: "-0.3px" }}>
+                Enter Password
+              </div>
+            </div>
+            <div style={{ width: "100%" }}>
+              <input
+                ref={inputRef}
+                type="password"
+                value={value}
+                onChange={(e) => { setValue(e.target.value); if (error) setError(false); }}
+                placeholder="Password"
+                style={{
+                  width: "100%", background: BRAND.white,
+                  border: `1px solid ${error ? "#CC3C00" : C.inputBorder}`,
+                  borderRadius: 4, fontSize: 14, fontFamily: FONT, color: C.titleText,
+                  outline: "none", padding: "12px 14px", transition: "border-color 0.2s",
+                }}
+                onFocus={(e) => { if (!error) e.target.style.borderColor = BRAND.blue; }}
+                onBlur={(e) => { if (!error) e.target.style.borderColor = C.inputBorder; }}
+              />
+              {error && (
+                <div style={{ fontSize: 11, color: "#CC3C00", marginTop: 8, fontWeight: 400 }}>
+                  Incorrect password. Please try again.
+                </div>
+              )}
+            </div>
+            <button type="submit" style={{
+              width: "100%", padding: "12px 20px", fontSize: 13, fontFamily: FONT, fontWeight: 500,
+              color: BRAND.white, background: BRAND.blue, border: "none", borderRadius: 100,
+              cursor: "pointer", transition: "background 0.2s",
+            }}
+              onMouseEnter={(e) => e.currentTarget.style.background = BRAND.blueDark}
+              onMouseLeave={(e) => e.currentTarget.style.background = BRAND.blue}>
+              Continue
+            </button>
+          </form>
+        </div>
+      );
+    }
+
     /* ─── App ─── */
     function App() {
       const [name, setName] = useState("Candidate Name");
@@ -641,7 +712,18 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    function Root() {
+      const [authed, setAuthed] = useState(() => {
+        try { return sessionStorage.getItem("ca_authed") === "1"; } catch (e) { return false; }
+      });
+      const unlock = () => {
+        try { sessionStorage.setItem("ca_authed", "1"); } catch (e) {}
+        setAuthed(true);
+      };
+      return authed ? <App /> : <PasswordGate onUnlock={unlock} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
   </script>
 </body>
 </html>
